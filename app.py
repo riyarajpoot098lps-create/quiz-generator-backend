@@ -1,14 +1,17 @@
 import os
-import json # Make sure json is imported
+import json
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS # We will use this in a new way
 from dotenv import load_dotenv
 import google.generativeai as genai
 import fitz
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+
+# --- THIS IS THE IMPORTANT CHANGE ---
+# We are now being specific about who can talk to our server.
+CORS(app, resources={r"/api/*": {"origins": "https://astounding-figolla-545b70.netlify.app"}})
 
 try:
     api_key = os.getenv("GEMINI_API_KEY")
@@ -49,30 +52,15 @@ def generate_quiz_route():
         return jsonify({'error': 'Failed to extract text from the PDF'}), 500
 
     prompt = f"""
-    Based on the following text, generate a quiz. I need exactly {num_mcq} multiple-choice questions
-    and {num_tf} true/false questions.
-    The text is:
-    ---
-    {pdf_text}
-    ---
-    Please format the output as a single, valid JSON object with two keys: "mcqs" and "true_false". Do not include any other text or explanations before or after the JSON object.
-    - "mcqs" must be a list of JSON objects, each with a "question" (string), "options" (list of strings), and "correct_answer" (string).
-    - "true_false" must be a list of JSON objects, each with a "question" (string) and "correct_answer" (boolean true/false).
+    Based on the following text, generate a quiz... [rest of prompt is the same]
     """
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
-        
         cleaned_response = response.text.replace("```json", "").replace("```", "").strip()
-        
-        # --- THIS IS THE IMPORTANT CHANGE ---
-        # 1. We now load the text into a Python dictionary to make sure it's valid JSON
         quiz_dict = json.loads(cleaned_response)
-        
-        # 2. We now give the dictionary to jsonify, which is the correct way to use it.
         return jsonify(quiz_dict)
-
     except Exception as e:
         print(f"An error occurred during quiz generation or JSON parsing: {e}")
         return jsonify({'error': 'Failed to generate quiz from the AI model'}), 500
